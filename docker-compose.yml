@@ -1,0 +1,63 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: placement_mongodb
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    volumes: [mongodb_data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8.0
+    container_name: placement_mysql
+    restart: unless-stopped
+    ports: ["3306:3306"]
+    volumes: [mysql_data:/var/lib/mysql]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: student_placement
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  backend:
+    build: ./backend
+    container_name: placement_backend
+    restart: unless-stopped
+    ports: ["5000:5000"]
+    depends_on:
+      mongodb: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      FRONTEND_URL: http://localhost:5173
+      MONGODB_URI: mongodb://mongodb:27017/placementNotifierDB
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: student_placement
+      JWT_SECRET: change-this-secret-before-deploying
+      JWT_EXPIRES_IN: 7d
+      ADMIN_EMAIL: admin@placement.com
+      ADMIN_PASSWORD: Admin@123
+
+  frontend:
+    build: ./frontend
+    container_name: placement_frontend
+    restart: unless-stopped
+    ports: ["5173:5173"]
+    depends_on: [backend]
+    environment:
+      VITE_PROXY_TARGET: http://backend:5000
+
+volumes:
+  mongodb_data:
+  mysql_data:
